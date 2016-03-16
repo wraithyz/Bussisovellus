@@ -15,6 +15,7 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v7.app.AppCompatActivity;
@@ -53,6 +54,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class Map extends AppCompatActivity implements OnMapReadyCallback
 {
@@ -61,45 +64,14 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
     private IconGenerator iconGenerator;
     private SlidingMenu slidingMenu;
     private GridView gridView;
+
     private ArrayList<BusStop> busStops;
     private HashMap<String, Marker> visibleMarkers;
+    private ArrayList<Bus> busesOnMap;
+
     private DatabaseHelper databaseHelper;
-    Marker lastOpened = null;
-    InputStream in;
-
-    public static String readUrl(String urlString) throws Exception
-    {
-        BufferedReader reader = null;
-        try
-        {
-            URL url = new URL(urlString);
-
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.getRequestMethod();
-            conn.connect();
-            if (conn.getResponseCode() == 404 || conn.getResponseCode() == 422)
-            {
-                return "";
-            }
-            reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-            StringBuilder buffer = new StringBuilder();
-            int read;
-            char[] chars = new char[1024];
-            while ((read = reader.read(chars)) != -1)
-            {
-                buffer.append(chars, 0, read);
-            }
-            return buffer.toString();
-        }
-        finally
-        {
-            if (reader != null)
-            {
-                reader.close();
-            }
-        }
-    }
-
+    private Marker lastOpened = null;
+    private InputStream in;
 
     @Override
     protected void onCreate(Bundle savedInstanceState)
@@ -148,6 +120,13 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
         //iconGenerator = new IconGenerator(this);
         busStops = new ArrayList<>();
         visibleMarkers = new HashMap<>();
+        busesOnMap = new ArrayList<>();
+
+        // Debug circle.
+        circle = mMap.addCircle(new CircleOptions()
+                .center(mMap.getCameraPosition().target)
+                .radius(500)
+                .strokeColor(Color.RED));
 
         mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener()
         {
@@ -161,8 +140,8 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
                 SQLiteDatabase db = databaseHelper.getWritableDatabase();
 
                 db.beginTransaction();
-
-                for(Entry<String, Marker> entry : visibleMarkers.entrySet())
+                long startTime2 = System.nanoTime();
+                for (Entry<String, Marker> entry : visibleMarkers.entrySet())
                 {
                     if (entry.getValue().equals(marker))
                     {
@@ -202,6 +181,7 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
                 db.setTransactionSuccessful();
                 db.endTransaction();
                 marker.showInfoWindow();
+                Log.v("Overall", String.valueOf(System.nanoTime() - startTime2));
                 return true;
             }
         });
@@ -213,10 +193,24 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
         */
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(61.498056, 23.760833), 10));
         new DatabaseHandler(this).execute();
-        new ReadBusJson().execute("http://data.itsfactory.fi/siriaccess/vm/json");
+        final Handler handler = new Handler();
+        Timer timer = new Timer();
+        TimerTask doAsynchronousTask = new TimerTask()
+        {
+            @Override
+            public void run()
+            {
+                handler.post(new Runnable()
+                {
+                    public void run()
+                    {
+                        new ReadBusJson().execute("http://data.itsfactory.fi/siriaccess/vm/json");
+                    }
+                });
+            }
+        };
+        timer.schedule(doAsynchronousTask, 0, 20000); // 20 seconds.
     }
-
-
 
     public LatLngBounds toBounds(LatLng center, double radius)
     {
@@ -227,7 +221,7 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
 
     public Drawable createBusMarkerIcon(Drawable backgroundImage, String text)
     {
-        Bitmap canvasBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.bus_circle).copy(Bitmap.Config.ARGB_8888, true);
+        Bitmap canvasBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.bus_circle_with_arrow).copy(Bitmap.Config.ARGB_8888, true);
 
         Canvas imageCanvas = new Canvas(canvasBitmap);
 
@@ -395,7 +389,7 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
         protected Cursor doInBackground(String... params)
         {
 /*
-            Log.v("DB", "Started to read files");
+            Log.v("DB", "Started to read stops");
             readFile("stops.txt", "stops");
             Log.v("DB", "Finished reading stops");
 
@@ -500,8 +494,6 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
                                 .anchor(0.5f, 0.5f)
                                 .icon(BitmapDescriptorFactory.fromResource(R.drawable.bus_stop_icon_green))
                                 .title(busStop.getCode() + ": " + busStop.getName())));
-
-
                         }
                     }
                     else
@@ -522,6 +514,7 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
         @Override
         protected String doInBackground(String... params)
         {
+            Log.v("BusUpdate", "Updating buses on map");
             BufferedReader reader = null;
             try
             {
@@ -573,40 +566,122 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
                 try
                 {
                     JSONObject object = new JSONObject(result);
-                    JSONArray jsonArray = object.getJSONObject("Siri").getJSONObject("ServiceDelivery").getJSONArray("VehicleMonitoringDelivery").getJSONObject(0).getJSONArray("VehicleActivity");
+                    JSONArray jsonArray = object.getJSONObject("Siri")
+                            .getJSONObject("ServiceDelivery")
+                            .getJSONArray("VehicleMonitoringDelivery")
+                            .getJSONObject(0).getJSONArray("VehicleActivity");
 
                     Resources res = getResources();
+                    Drawable drawable = res.getDrawable(R.drawable.bus_circle_with_arrow);
 
-                    Drawable drawable = res.getDrawable(R.drawable.bus_circle);
+                    Log.v("BusUpdate", "Current bus count: " + String.valueOf(busesOnMap.size()));
+                    Log.v("BusUpdate", "New bus count: " + String.valueOf(jsonArray.length()));
 
-                    //Drawable drawable = res.getDrawable(R.mipmap.bus_marker);
-                    //Bitmap bitmap = ((BitmapDrawable) drawable).getBitmap();
-                    //Drawable d = new BitmapDrawable(getResources(), Bitmap.createScaledBitmap(bitmap, 64, 64, true));
-                    //iconGenerator.setBackground(drawable);
 
-                    //iconGenerator.setTextAppearance(R.style.BusText);
-
-                    circle = mMap.addCircle(new CircleOptions()
-                            .center(mMap.getCameraPosition().target)
-                            .radius(500)
-                            .strokeColor(Color.RED));
-
-                    for (int i = 0; i < jsonArray.length(); i++)
+                    if (jsonArray.length() > 0)
                     {
-                        JSONObject row = jsonArray.getJSONObject(i);
-                        JSONObject info = row.getJSONObject("MonitoredVehicleJourney");
-                        String line = info.getJSONObject("LineRef").getString("value");
-                        LatLng position = new LatLng(info.getJSONObject("VehicleLocation").getDouble("Latitude"),
-                                                     info.getJSONObject("VehicleLocation").getDouble("Longitude"));
-                        //iconGenerator.setBackground(createBusMarkerIcon(drawable, line, 64, 64));
-                        //Bitmap b = iconGenerator.makeIcon();
-                        mMap.addMarker(new MarkerOptions()
-                                .position(position)
-                                .anchor(0.5f, 0.5f)
-                                .icon(BitmapDescriptorFactory.fromBitmap(drawableToBitmap(createBusMarkerIcon(drawable, line)))));
+                        if (!busesOnMap.isEmpty())
+                        {
+                            ArrayList<String> toRemove = new ArrayList<>();
+                            ArrayList<Bus> busesToAdd = new ArrayList<>();
+                            for (Bus bus : busesOnMap)
+                            {
+                                bus.setToBeRemoved(true);
+                                JSONObject busInfo;
+                                for (int i = 0; i < jsonArray.length(); i++)
+                                {
+                                    JSONObject row = jsonArray.getJSONObject(i);
+                                    busInfo = row.getJSONObject("MonitoredVehicleJourney");
+                                    String id = busInfo.getJSONObject("VehicleRef").getString("value");
+                                    if (bus.getId().equals(id))
+                                    {
+                                        Log.v("BusUpdate", "Updating bus: " + id);
+                                        LatLng location = new LatLng(busInfo.getJSONObject("VehicleLocation").getDouble("Latitude"),
+                                                busInfo.getJSONObject("VehicleLocation").getDouble("Longitude"));
+                                        int bearing = busInfo.getInt("Bearing");
+                                        String delay = busInfo.getString("Delay");
+                                        if (bus.getLocation().latitude != location.latitude || bus.getLocation().longitude != location.longitude)
+                                        {
+                                            bus.setLocation(new LatLng(location.latitude, location.longitude));
+                                            bus.getMarker().setPosition(bus.getLocation());
+                                        }
+                                        if (bus.getBearing() != bearing)
+                                        {
+                                            bus.setBearing(bearing);
+                                            bus.getMarker().setRotation(bus.getBearing());
+                                            //TODO: Update marker arrow bearing.
+                                        }
+                                        if (!bus.getDelay().equals(delay))
+                                        {
+                                            bus.setDelay(delay);
+                                        }
+                                        bus.setToBeRemoved(false);
+                                        break;
+                                    }
+                                    if (i + 1 == jsonArray.length())
+                                    {
+                                        Log.v("BusUpdate", "Adding new bus: " + id);
+                                        LatLng location = new LatLng(busInfo.getJSONObject("VehicleLocation").getDouble("Latitude"),
+                                                busInfo.getJSONObject("VehicleLocation").getDouble("Longitude"));
+                                        int bearing = busInfo.getInt("Bearing");
+                                        String delay = busInfo.getString("Delay");
+                                        String line = busInfo.getJSONObject("LineRef").getString("value");
+                                        busesToAdd.add(new Bus(id, line, location, bearing, delay,
+                                                mMap.addMarker(new MarkerOptions()
+                                                        .rotation(bearing)
+                                                        .position(location)
+                                                        .anchor(0.5f, 0.5f)
+                                                        .icon(BitmapDescriptorFactory.fromBitmap(drawableToBitmap(createBusMarkerIcon(drawable, line)))))));
+                                    }
+                                }
+                                if (bus.isToBeRemoved())
+                                {
+                                    toRemove.add(bus.getId());
+                                }
+                            }
+                            // Adding and removing outside of for loop to avoid ConcurrentModificationException.
+                            busesOnMap.addAll(busesToAdd);
+                            //TODO: Iterator?
+                            for (String busId : toRemove)
+                            {
+                                int j = 0;
+                                for (int i = 0; i < busesOnMap.size(); i++)
+                                {
+                                    if (busesOnMap.get(i).getId().equals(busId))
+                                    {
+                                        j = i;
+                                        break;
+                                    }
+                                }
+                                Log.v("BusUpdate", "Removing bus: " + busId);
+                                busesOnMap.get(j).getMarker().remove();
+                                busesOnMap.remove(j);
+                            }
+                        }
+                        // No buses on map to update. Add all.
+                        else
+                        {
+                            for (int i = 0; i < jsonArray.length(); i++)
+                            {
+                                JSONObject row = jsonArray.getJSONObject(i);
+                                JSONObject busInfo = row.getJSONObject("MonitoredVehicleJourney");
+                                String id = busInfo.getJSONObject("VehicleRef").getString("value");
+                                String line = busInfo.getJSONObject("LineRef").getString("value");
+                                LatLng location = new LatLng(busInfo.getJSONObject("VehicleLocation").getDouble("Latitude"),
+                                        busInfo.getJSONObject("VehicleLocation").getDouble("Longitude"));
+                                int bearing =  busInfo.getInt("Bearing");
+                                String delay = busInfo.getString("Delay");
+
+                                busesOnMap.add(new Bus(id, line, location, bearing, delay,
+                                        mMap.addMarker(new MarkerOptions()
+                                                .rotation(bearing)
+                                                .position(location)
+                                                .anchor(0.5f, 0.5f)
+                                                .icon(BitmapDescriptorFactory.fromBitmap(drawableToBitmap(createBusMarkerIcon(drawable, line)))))));
+                            }
+                        }
+
                     }
-
-
                 }
                 catch (JSONException e)
                 {

@@ -1,44 +1,57 @@
 package com.samuli.bussisovellus;
 
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 
 public class Bus
 {
+    private String id;
     private String line;
-    private String origin;
-    private String destination;
     private LatLng location;
     private int bearing;
-    private double delay;
+    private String delay;
+    private Marker marker;
+    private boolean toBeRemoved;
 
-    public Bus(String line, String origin, String destination, LatLng location, int bearing, double delay)
+    public Bus(String id, String line, LatLng location, int bearing, String delay, Marker marker)
     {
+        this.id = id;
         this.line = line;
-        this.origin = origin;
-        this.destination = destination;
         this.location = location;
         this.bearing = bearing;
         this.delay = delay;
+        this.marker = marker;
+        this.toBeRemoved = false;
     }
 
-    public String getOrigin()
+    public boolean isToBeRemoved()
     {
-        return origin;
+        return toBeRemoved;
     }
 
-    public void setOrigin(String origin)
+    public void setToBeRemoved(boolean toBeRemoved)
     {
-        this.origin = origin;
+        this.toBeRemoved = toBeRemoved;
     }
 
-    public String getDestination()
+    public String getId()
     {
-        return destination;
+        return id;
     }
 
-    public void setDestination(String destination)
+    public void setId(String id)
     {
-        this.destination = destination;
+        this.id = id;
+    }
+
+    public Marker getMarker()
+    {
+        return marker;
+    }
+
+    public void setMarker(Marker marker)
+    {
+        this.marker = marker;
     }
 
     public LatLng getLocation()
@@ -61,12 +74,12 @@ public class Bus
         this.bearing = bearing;
     }
 
-    public double getDelay()
+    public String getDelay()
     {
         return delay;
     }
 
-    public void setDelay(double delay)
+    public void setDelay(String delay)
     {
         this.delay = delay;
     }
