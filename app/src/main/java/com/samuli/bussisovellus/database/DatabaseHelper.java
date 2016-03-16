@@ -56,6 +56,10 @@ public class DatabaseHelper extends SQLiteOpenHelper
                         StopTimes.COL_STOP_ID  + TEXT_TYPE + COMMA_SEP +
                         StopTimes.COL_STOP_SEQUENCE  + INTEGER_TYPE + ")";
 
+        public static final String SQL_CREATE_INDEX =
+                "CREATE INDEX trip_id_index ON " + StopTimes.TABLE_NAME + " (" +
+                StopTimes.COL_TRIP_ID + COMMA_SEP + StopTimes.COL_STOP_ID + ")";
+
         public static final String SQL_DELETE_ENTRIES =
                 "DROP TABLE IF EXISTS " + StopTimes.TABLE_NAME;
 
@@ -182,6 +186,7 @@ public class DatabaseHelper extends SQLiteOpenHelper
     {
         db.execSQL(Stops.SQL_CREATE_ENTRIES);
         db.execSQL(StopTimes.SQL_CREATE_ENTRIES);
+        db.execSQL(StopTimes.SQL_CREATE_INDEX);
         db.execSQL(Calendar.SQL_CREATE_ENTRIES);
         db.execSQL(CalendarDates.SQL_CREATE_ENTRIES);
         db.execSQL(Routes.SQL_CREATE_ENTRIES);
