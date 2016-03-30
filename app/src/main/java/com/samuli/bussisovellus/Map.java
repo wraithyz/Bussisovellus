@@ -21,6 +21,7 @@ import android.support.v4.app.FragmentManager;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.widget.GridView;
+import android.widget.ImageView;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -62,7 +63,6 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
     private Circle circle;
     private GoogleMap mMap;
     private IconGenerator iconGenerator;
-    private SlidingMenu slidingMenu;
     private GridView gridView;
 
     private ArrayList<BusStop> busStops;
@@ -73,15 +73,18 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
     private Marker lastOpened = null;
     private InputStream in;
 
+    private SlidingMenu slidingMenu;
+
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_map);
         databaseHelper = new DatabaseHelper(this);
+
         slidingMenu = new SlidingMenu(this);
-        slidingMenu.setMode(SlidingMenu.RIGHT_OF);
-        slidingMenu.setTouchModeAbove(SlidingMenu.TOUCHMODE_MARGIN);
+        slidingMenu.setMode(SlidingMenu.RIGHT);
+        slidingMenu.setTouchModeAbove(SlidingMenu.TOUCHMODE_FULLSCREEN);
         slidingMenu.setShadowWidthRes(R.dimen.slidingmenu_shadow_width);
         slidingMenu.setShadowDrawable(R.drawable.slidingmenu_shadow);
         slidingMenu.setBehindOffsetRes(R.dimen.slidingmenu_offset);
@@ -89,15 +92,17 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
         slidingMenu.attachToActivity(this, SlidingMenu.SLIDING_CONTENT);
         slidingMenu.setMenu(R.layout.slidingmenu);
 
-        gridView = (GridView) findViewById(R.id.gridView);
-        gridView.setAdapter(new BusListElementAdapter(this, this));
+        ImageView imageView = (ImageView) findViewById(R.id.bus_icon);
+        imageView.setImageResource(R.drawable.sidebar_bus_icon);
+        imageView.setImageResource(R.drawable.sidebar_bus_icon);
+        imageView.setImageResource(R.drawable.sidebar_bus_icon);
+
 
         FragmentManager fManager = getSupportFragmentManager();
         Fragment fragment = fManager.findFragmentById(R.id.map);
         SupportMapFragment supportmapfragment = (SupportMapFragment) fragment;
 
         supportmapfragment.getMapAsync(this);
-
     }
 
     @Override
@@ -609,7 +614,6 @@ public class Map extends AppCompatActivity implements OnMapReadyCallback
                                         {
                                             bus.setBearing(bearing);
                                             bus.getMarker().setRotation(bus.getBearing());
-                                            //TODO: Update marker arrow bearing.
                                         }
                                         if (!bus.getDelay().equals(delay))
                                         {

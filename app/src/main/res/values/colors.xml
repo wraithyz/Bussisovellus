@@ -11,4 +11,5 @@
     <color name="black_light">#2E3136</color>
     <color name="black_middle">#282B30</color>
     <color name="black_dark">#1E2124</color>
+    <color name="transparent_white">#80FFFFFF</color>
 </resources>
